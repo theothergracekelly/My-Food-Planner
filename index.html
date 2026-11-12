@@ -125,15 +125,23 @@ function renderNutrition(d){
  const food=items(d).filter(e=>e.category!=='Exercise'),h=state.history?.[d],g=state.goals;
  const rows=[['Calories','calories',g.calories,'kcal','target'],['Protein','protein',g.protein,'g','target'],['Fiber','fiber',g.fiber,'g','target'],['Fat','fat',g.fat,'g','flexible'],['Carbohydrates','carbs',g.carbs,'g','flexible'],['Saturated fat','satFat',g.satFat,'g','maximum']];
  const totals=total(d);
+ const hasValue=v=>v!==null&&v!==undefined&&v!==''&&Number.isFinite(Number(v));
  let html=rows.map(([label,key,goal,unit,kind])=>{
-  const values=food.map(e=>e[key]);const complete=values.length&&values.every(v=>v!==null&&v!==undefined&&v!=='');
-  const value=key==='calories'?totals.count?totals.food:null:complete?values.reduce((a,b)=>a+Number(b),0):h?.[key];
-  const valid=value!==null&&value!==undefined;const pct=valid&&goal>0?value/goal*100:0;
+  const values=food.map(e=>e[key]);
+  const known=values.filter(hasValue);
+  const complete=values.length>0&&known.length===values.length;
+  const historical=!complete&&hasValue(h?.[key]);
+  const value=key==='calories'?(food.length?totals.food:null):known.length?known.reduce((sum,v)=>sum+Number(v),0):historical?Number(h[key]):null;
+  const valid=value!==null&&Number.isFinite(value);
+  const pct=valid&&goal>0?value/goal*100:0;
   const note=kind==='maximum'?'Suggested upper guideline':kind==='flexible'?'Flexible planning reference':'Daily planning target';
-  return `<div class="goal-row"><div class="goal-top"><strong>${label}</strong><span>${valid?'~'+num(value):'Not fully logged'} / ${num(goal)} ${unit}</span></div><div class="goal-track" role="progressbar" aria-label="${label}" aria-valuenow="${valid?Math.round(value):0}" aria-valuemin="0" aria-valuemax="${goal}"><div class="goal-fill ${kind==='maximum'&&pct>100?'over':''}" style="width:${Math.max(0,Math.min(100,pct))}%"></div></div><div class="goal-note">${note}${!complete&&key!=='calories'&&h&&valid?' · historical estimate':''}</div></div>`;
+  const partial=key!=='calories'&&!complete&&known.length>0;
+  const context=key==='calories'?'':partial?' · partial total ('+known.length+' of '+values.length+' entries)':'';
+  const missing=key!=='calories'&&!complete&&!historical&&!known.length&&food.length?' · no values entered for this nutrient':'';
+  return `<div class="goal-row"><div class="goal-top"><strong>${label}</strong><span>${valid?'~'+num(value)+(partial?' (partial)':''):'Not fully logged'} / ${num(goal)} ${unit}</span></div><div class="goal-track" role="progressbar" aria-label="${label}" aria-valuenow="${valid?Math.round(value):0}" aria-valuemin="0" aria-valuemax="${goal}"><div class="goal-fill ${kind==='maximum'&&pct>100?'over':''}" style="width:${Math.max(0,Math.min(100,pct))}%"></div></div><div class="goal-note">${note}${context}${historical?' · historical estimate':''}${missing}</div></div>`;
  }).join('');
- html+=`<div class="tip">Aim for consistency over time, not perfect numbers each day. For blood-pressure support, sodium also matters; this tracker does not yet calculate sodium. Your calorie target is a starting estimate and may need adjustment based on your weight trend and energy levels.</div>`;
- html+='<p class="help">Missing nutrient details are shown as not fully logged, rather than counted as zero. Exercise is not deducted from your nutrition goals.</p>';
+ html+=`<div class="tip">Aim for consistency over time, not perfect numbers each day. For blood-pressure support, sodium also matters: this tracker does not yet calculate sodium. Your calorie target is a starting estimate and may need adjustment based on your weight trend and energy levels.</div>`;
+ html+='<p class="help">Nutrition totals add available values for each nutrient independently. Missing values are not counted as zero; a partial label means at least one food entry is missing that nutrient. Exercise is not deducted from your nutrition goals.</p>';
  return html;
 }
 $('editGoals').onclick=()=>{for(const k of Object.keys(defaultGoals))$('goal'+k[0].toUpperCase()+k.slice(1)).value=state.goals[k];$('goalsEditor').showModal()};
